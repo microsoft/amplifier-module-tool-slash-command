@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "amplifier-module-tool-slash-command"
+version = "0.1.0"
+description = "Extensible slash command system for Amplifier"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "robotdad", email = "robotdad@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "amplifier-core>=0.1.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/robotdad/amplifier-module-tool-slash-command"
+Repository = "https://github.com/robotdad/amplifier-module-tool-slash-command"
+
+[tool.hatch.build.targets.wheel]
+packages = ["slash_command"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["slash_command"]
+omit = ["tests/*", "examples/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
