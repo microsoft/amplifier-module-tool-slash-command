@@ -37,7 +37,7 @@ class CommandParser:
     FRONTMATTER_PATTERN = re.compile(
         r"^---\s*\n(.*?)\n---\s*\n(.*)$", re.DOTALL | re.MULTILINE
     )
-    VARIABLE_PATTERN = re.compile(r"\{\{(\$\d+|ARGUMENTS)\s+or\s+\"([^\"]*)\"\}\}")
+    VARIABLE_PATTERN = re.compile(r"\{\{(\$\d+|\$ARGUMENTS)\s+or\s+\"([^\"]*)\"\}\}")
     SIMPLE_VARIABLE_PATTERN = re.compile(r"\$(\d+|\bARGUMENTS\b)")
 
     def parse_file(self, file_path: Path, namespace: str | None = None) -> ParsedCommand:
@@ -142,7 +142,7 @@ class CommandParser:
             var_name = match.group(1)
             default = match.group(2)
 
-            if var_name == "ARGUMENTS":
+            if var_name == "$ARGUMENTS":
                 return args if args else default
 
             # Extract position number
