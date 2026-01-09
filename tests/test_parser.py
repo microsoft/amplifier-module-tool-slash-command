@@ -43,7 +43,7 @@ def test_parse_command_with_all_fields(parser, temp_command_file):
     content = """---
 description: Full test command
 allowed-tools: [read_file, grep]
-argument-hint: [file-path] [pattern]
+argument-hint: "[file-path] [pattern]"
 model: anthropic/claude-sonnet-4.5
 ---
 
