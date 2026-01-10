@@ -9,8 +9,12 @@ This module provides:
 - **Project-scoped** commands (`.amplifier/commands/`)
 - **User-scoped** commands (`~/.amplifier/commands/`)
 - **Template substitution** for arguments (`$ARGUMENTS`, `$1`, `$2`, etc.)
-- **Tool integration** via `allowed-tools` frontmatter
-- **Namespace support** via subdirectories
+- **Bash execution** in templates (`!`command`` syntax)
+- **File references** (`@path/to/file` includes file content)
+- **Granular permissions** (`Bash(git add:*)` restricts which commands can run)
+- **Command composition** (commands can invoke other commands)
+- **Model override** (per-command model selection)
+- **LLM discovery** (AI can list and invoke commands programmatically)
 
 Inspired by Claude Code's extensible slash command system, adapted for Amplifier's modular architecture.
 
@@ -82,9 +86,16 @@ Commands are registered when the session starts.
 
 ```yaml
 description: Brief description shown in /help
-allowed-tools: [tool1, tool2]  # Optional: restrict which tools can be used
-argument-hint: [arg1] [arg2]   # Optional: shown in autocomplete
-model: provider/model-name     # Optional: override session model
+allowed-tools:                    # Tool restrictions (see Granular Permissions)
+  - bash                          # Allow all bash commands
+  - Bash(git status:*)            # Allow only specific bash commands
+  - read_file                     # Allow specific tools
+argument-hint: [arg1] [arg2]      # Shown in autocomplete
+model: claude-3-5-haiku-20241022  # Override session model for this command
+max-chars: 10000                  # Truncate output to character limit
+requires-approval: true           # Require user confirmation before execution
+approval-message: "This will..."  # Custom approval prompt
+disable-model-invocation: true    # Hide from LLM discovery (user-only command)
 ```
 
 ### Template Variables
@@ -93,7 +104,144 @@ model: provider/model-name     # Optional: override session model
 - `$1`, `$2`, `$3`, ... - Individual positional arguments
 - `{{$1 or "default"}}` - Variable with fallback value
 
-### Examples
+### Bash Execution
+
+Execute shell commands during template processing:
+
+**Inline bash:**
+```markdown
+Current branch: !`git branch --show-current`
+```
+
+**Block bash:**
+```markdown
+!```
+git status --short
+git log --oneline -5
+```
+```
+
+**Requires** `bash` in `allowed-tools`. See Granular Permissions for fine-grained control.
+
+### File References
+
+Include file contents in templates:
+
+```markdown
+Review this code:
+@src/main.py
+
+Compare with:
+@src/utils.py
+```
+
+### Command Composition
+
+Commands can invoke other commands:
+
+```markdown
+---
+description: Full project review
+allowed-tools: [Bash(git status:*), Bash(git diff:*)]
+---
+
+## Git Status
+/git-status
+
+## Code Review
+/review src/
+
+Summarize the project state above.
+```
+
+Nested commands are executed and their output is substituted into the parent template.
+Maximum nesting depth: 5 levels (prevents infinite loops).
+
+## Granular Permissions
+
+Control exactly which bash commands a slash command can execute:
+
+```yaml
+allowed-tools:
+  - Bash(git status:*)    # Only git status commands
+  - Bash(git diff:*)      # Only git diff commands
+  - Bash(git log:*)       # Only git log commands
+```
+
+**Pattern matching:**
+- `Bash(git add:*)` - Allows `git add .`, `git add -A`, `git add file.txt`
+- `Bash(ls:*)` - Allows `ls`, `ls -la`, `ls /path`
+
+**Security:**
+- Commands not matching any pattern are **blocked**
+- Blocked commands show `[Command blocked: reason]` in output
+- Warnings are returned to the caller
+
+**Example - Safe git operations only:**
+
+```markdown
+---
+description: Safe git status check
+allowed-tools:
+  - Bash(git status:*)
+  - Bash(git diff:*)
+  - Bash(git log:*)
+---
+
+!`git status`      # Allowed
+!`git diff HEAD`   # Allowed
+!`git push`        # BLOCKED - not in allowed patterns
+!`rm -rf /`        # BLOCKED - not in allowed patterns
+```
+
+## LLM Command Discovery (Skill Tool)
+
+The LLM can discover and invoke commands programmatically:
+
+**List available commands:**
+```python
+result = await tools["slash_command"](operation="list")
+# Returns: {"commands": [...], "count": N}
+```
+
+**Execute a command:**
+```python
+result = await tools["slash_command"](
+    operation="execute",
+    command="review",
+    args="src/auth.py"
+)
+```
+
+**Hiding commands from LLM:**
+
+Add `disable-model-invocation: true` to hide sensitive commands:
+
+```yaml
+---
+description: Admin-only command
+disable-model-invocation: true
+---
+```
+
+These commands won't appear in `list` and will be blocked if the LLM tries to execute them directly.
+
+## Model Override
+
+Specify a different model for specific commands:
+
+```markdown
+---
+description: Quick answer using faster model
+model: claude-3-5-haiku-20241022
+---
+
+Give a brief answer to: $ARGUMENTS
+```
+
+The `model_override` is returned in the tool result for the CLI/orchestrator to use.
+
+## Examples
 
 **Simple command:**
 ```markdown
@@ -103,26 +251,46 @@ description: Explain code in simple terms
 Explain this code in simple, beginner-friendly terms: $ARGUMENTS
 ```
 
-**With fallback:**
+**With bash and file refs:**
 ```markdown
 ---
-description: Optimize code for performance
-argument-hint: [file-path]
+description: Project context dump
+allowed-tools: [bash]
 ---
-Analyze {{$1 or "current file"}} for performance bottlenecks and suggest optimizations.
+
+## Git Status
+!`git status --short`
+
+## Recent Commits
+!`git log --oneline -10`
+
+## README
+@README.md
 ```
 
-**With tool restrictions:**
+**With granular permissions:**
 ```markdown
 ---
-description: Security audit
-allowed-tools: [read_file, grep]
+description: Safe git operations
+allowed-tools:
+  - Bash(git status:*)
+  - Bash(git diff:*)
 ---
-Perform security audit on {{$1}}:
-- Check for SQL injection vulnerabilities
-- Look for XSS risks
-- Scan for hardcoded secrets
-- Review authentication/authorization
+
+Current status: !`git status --short`
+Changes: !`git diff --stat`
+```
+
+**Command composition:**
+```markdown
+---
+description: Full review combining multiple commands
+---
+
+/git-status
+/file-review README.md
+
+Summarize the above.
 ```
 
 ## Namespacing
@@ -132,11 +300,11 @@ Organize commands in subdirectories:
 ```
 .amplifier/commands/
 ├── frontend/
-│   ├── review.md      # /review (shown as "project:frontend")
-│   └── test.md        # /test (shown as "project:frontend")
+│   ├── review.md      # /review (namespace: frontend)
+│   └── test.md        # /test (namespace: frontend)
 └── backend/
-    ├── review.md      # /review (shown as "project:backend")
-    └── deploy.md      # /deploy (shown as "project:backend")
+    ├── review.md      # /review (namespace: backend)
+    └── deploy.md      # /deploy (namespace: backend)
 ```
 
 Commands with the same name in different namespaces are distinguished by their description in `/help`.
@@ -146,13 +314,15 @@ Commands with the same name in different namespaces are distinguished by their d
 ### Module Structure
 
 ```
-slash_command/
+amplifier_module_tool_slash_command/
 ├── __init__.py           # Module entry point
 ├── tool.py               # Tool implementation (slash_command tool)
 ├── command_loader.py     # Discovers and loads .md files
 ├── parser.py             # Parses frontmatter and templates
 ├── executor.py           # Executes commands with substitution
-└── registry.py           # Command registry management
+├── registry.py           # Command registry management
+├── template_processor.py # Bash execution, file refs
+└── permissions.py        # Granular permission parsing
 ```
 
 ### Integration Pattern
@@ -176,21 +346,35 @@ async def mount(coordinator, config):
 
 ### Tool: `slash_command`
 
-Execute a custom slash command programmatically.
+Execute or discover custom slash commands.
 
 **Parameters:**
-- `command` (str): Command name (without leading `/`)
-- `args` (str, optional): Command arguments
+- `operation` (str): `"execute"` (default) or `"list"`
+- `command` (str): Command name (without leading `/`) - for execute
+- `args` (str, optional): Command arguments - for execute
 
-**Returns:**
-- Command output as string
-
-**Example:**
+**Execute returns:**
 ```python
-result = await tools["slash_command"](
-    command="review",
-    args="src/auth.py"
-)
+{
+    "prompt": "...",                    # Processed template content
+    "bash_commands_executed": 3,        # Number of bash commands run
+    "files_included": 2,                # Number of files included
+    "warnings": ["..."],                # Any warnings (optional)
+    "model_override": "model-name",     # If command specifies model (optional)
+    "requires_approval": True,          # If approval needed (optional)
+}
+```
+
+**List returns:**
+```python
+{
+    "commands": [
+        {"name": "review", "description": "...", "argument_hint": "..."},
+        ...
+    ],
+    "count": 5,
+    "hint": "Use operation='execute' with command='name' to run"
+}
 ```
 
 ### Registry Access
@@ -226,7 +410,7 @@ uv pip install -e ".[dev]"
 
 ```bash
 pytest
-pytest --cov=slash_command
+pytest --cov=amplifier_module_tool_slash_command
 ```
 
 ### Validation
@@ -235,42 +419,10 @@ pytest --cov=slash_command
 amplifier-core validate tool .
 ```
 
-## Example Commands
-
-See `examples/commands/` for ready-to-use commands:
-- `review.md` - Code review
-- `test.md` - Generate tests
-- `security.md` - Security audit
-- `optimize.md` - Performance optimization
-- `explain.md` - Code explanation
-- `document.md` - Generate documentation
-
-## Integration with amplifier-app-cli
-
-To integrate with amplifier-app-cli's CommandProcessor:
-
-```python
-from slash_command.registry import CommandRegistry
-
-# Initialize registry
-registry = CommandRegistry(session.coordinator)
-
-# Load commands
-registry.discover_commands()
-
-# Get commands for registration
-custom_commands = registry.get_command_dict()
-
-# Merge with CommandProcessor.COMMANDS
-command_processor.register_dynamic_commands(custom_commands)
-```
-
 ## Roadmap
 
-- [ ] Bash execution (`!` prefix for shell commands)
-- [ ] File references (`@` prefix for @mentions)
-- [ ] Character budget limits (prevent context overflow)
-- [ ] Permission controls (sensitive command restrictions)
+- [ ] Bundle/plugin commands (discover from installed bundles)
+- [ ] MCP prompt integration (expose MCP prompts as commands)
 - [ ] Command marketplace (shared command repository)
 - [ ] Command versioning (semantic versioning for commands)
 
