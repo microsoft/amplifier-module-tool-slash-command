@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from slash_command.parser import CommandParser, CommandMetadata, ParsedCommand
+from amplifier_module_tool_slash_command.parser import CommandParser, CommandMetadata, ParsedCommand
 
 
 @pytest.fixture

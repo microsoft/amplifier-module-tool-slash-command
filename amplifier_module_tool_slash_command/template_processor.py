@@ -8,6 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .permissions import (
+    GranularPermission,
+    is_bash_command_allowed,
+    parse_permissions,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,7 +72,9 @@ class TemplateProcessor:
 
         Args:
             template: Template content to process
-            allowed_tools: List of allowed tools (must include 'bash' for execution)
+            allowed_tools: List of allowed tools. Supports granular permissions:
+                - "bash" - Allow all bash commands
+                - "Bash(git add:*)" - Allow only commands starting with 'git add'
             include_files: Whether to process @file references
 
         Returns:
@@ -77,13 +85,20 @@ class TemplateProcessor:
         file_count = 0
 
         result = template
-        bash_allowed = allowed_tools and "bash" in allowed_tools
+
+        # Parse permissions (supports both simple and granular)
+        permissions = parse_permissions(allowed_tools)
+        bash_permissions = [p for p in permissions if p.tool == "bash"]
+        bash_allowed = len(bash_permissions) > 0
 
         # Process bash blocks first (multi-line)
         if self.BASH_BLOCK_PATTERN.search(result):
             if bash_allowed:
-                result, count = await self._process_bash_blocks(result)
+                result, count, block_warnings = await self._process_bash_blocks(
+                    result, bash_permissions
+                )
                 bash_count += count
+                warnings.extend(block_warnings)
             else:
                 warnings.append(
                     "Template contains bash blocks but 'bash' not in allowed-tools. "
@@ -93,8 +108,11 @@ class TemplateProcessor:
         # Process inline bash commands
         if self.BASH_INLINE_PATTERN.search(result):
             if bash_allowed:
-                result, count = await self._process_bash_inline(result)
+                result, count, inline_warnings = await self._process_bash_inline(
+                    result, bash_permissions
+                )
                 bash_count += count
+                warnings.extend(inline_warnings)
             else:
                 warnings.append(
                     "Template contains inline bash (!`) but 'bash' not in allowed-tools. "
@@ -114,13 +132,31 @@ class TemplateProcessor:
             warnings=warnings if warnings else None,
         )
 
-    async def _process_bash_blocks(self, template: str) -> tuple[str, int]:
-        """Process !``` bash blocks."""
+    async def _process_bash_blocks(
+        self, template: str, permissions: list[GranularPermission]
+    ) -> tuple[str, int, list[str]]:
+        """Process !``` bash blocks with permission checking.
+
+        Args:
+            template: Template containing bash blocks
+            permissions: List of bash permissions to check against
+
+        Returns:
+            Tuple of (processed template, execution count, warnings)
+        """
         count = 0
+        warnings: list[str] = []
 
         async def replace_block(match: re.Match) -> str:
             nonlocal count
             command = match.group(1).strip()
+
+            # Check granular permissions
+            allowed, reason = is_bash_command_allowed(command, permissions)
+            if not allowed:
+                warnings.append(f"Bash command blocked: {command[:50]}... - {reason}")
+                return f"[Command blocked: {reason}]"
+
             output = await self._execute_bash(command)
             count += 1
             return output
@@ -131,15 +167,33 @@ class TemplateProcessor:
             replacement = await replace_block(match)
             result = result.replace(match.group(0), replacement, 1)
 
-        return result, count
+        return result, count, warnings
 
-    async def _process_bash_inline(self, template: str) -> tuple[str, int]:
-        """Process inline !`command` patterns."""
+    async def _process_bash_inline(
+        self, template: str, permissions: list[GranularPermission]
+    ) -> tuple[str, int, list[str]]:
+        """Process inline !`command` patterns with permission checking.
+
+        Args:
+            template: Template containing inline bash commands
+            permissions: List of bash permissions to check against
+
+        Returns:
+            Tuple of (processed template, execution count, warnings)
+        """
         count = 0
+        warnings: list[str] = []
 
         async def replace_inline(match: re.Match) -> str:
             nonlocal count
             command = match.group(1).strip()
+
+            # Check granular permissions
+            allowed, reason = is_bash_command_allowed(command, permissions)
+            if not allowed:
+                warnings.append(f"Bash command blocked: {command[:50]}... - {reason}")
+                return f"[Command blocked: {reason}]"
+
             output = await self._execute_bash(command)
             count += 1
             return output
@@ -150,7 +204,7 @@ class TemplateProcessor:
             replacement = await replace_inline(match)
             result = result.replace(match.group(0), replacement, 1)
 
-        return result, count
+        return result, count, warnings
 
     async def _execute_bash(self, command: str) -> str:
         """Execute a bash command and return output.
@@ -161,7 +215,9 @@ class TemplateProcessor:
         Returns:
             Command output (stdout + stderr combined)
         """
-        logger.info(f"Executing bash command: {command[:100]}{'...' if len(command) > 100 else ''}")
+        logger.info(
+            f"Executing bash command: {command[:100]}{'...' if len(command) > 100 else ''}"
+        )
 
         try:
             # Run in executor to avoid blocking
@@ -188,7 +244,9 @@ class TemplateProcessor:
             return output.strip()
 
         except subprocess.TimeoutExpired:
-            logger.warning(f"Bash command timed out after {self.timeout}s: {command[:50]}")
+            logger.warning(
+                f"Bash command timed out after {self.timeout}s: {command[:50]}"
+            )
             return f"[Command timed out after {self.timeout} seconds]"
         except Exception as e:
             logger.error(f"Bash execution failed: {e}")
@@ -234,7 +292,9 @@ class TemplateProcessor:
                 if file_path.exists():
                     content = file_path.read_text(encoding="utf-8")
                     count += 1
-                    logger.debug(f"Included file: {file_path_str} ({len(content)} chars)")
+                    logger.debug(
+                        f"Included file: {file_path_str} ({len(content)} chars)"
+                    )
                     return f"```\n# {file_path_str}\n{content}\n```"
                 else:
                     warnings.append(f"File not found: @{file_path_str}")

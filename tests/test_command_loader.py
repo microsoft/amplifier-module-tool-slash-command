@@ -2,7 +2,7 @@
 
 import pytest
 from pathlib import Path
-from slash_command.command_loader import CommandLoader
+from amplifier_module_tool_slash_command.command_loader import CommandLoader
 
 
 @pytest.fixture

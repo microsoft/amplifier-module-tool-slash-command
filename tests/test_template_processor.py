@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from slash_command.template_processor import ProcessedTemplate, TemplateProcessor
+from amplifier_module_tool_slash_command.template_processor import ProcessedTemplate, TemplateProcessor
 
 
 class TestBashExecution:

@@ -28,8 +28,11 @@ dev = [
 Homepage = "https://github.com/robotdad/amplifier-module-tool-slash-command"
 Repository = "https://github.com/robotdad/amplifier-module-tool-slash-command"
 
+[project.entry-points."amplifier.modules"]
+tool-slash-command = "amplifier_module_tool_slash_command:mount"
+
 [tool.hatch.build.targets.wheel]
-packages = ["slash_command"]
+packages = ["amplifier_module_tool_slash_command"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -39,7 +42,7 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 
 [tool.coverage.run]
-source = ["slash_command"]
+source = ["amplifier_module_tool_slash_command"]
 omit = ["tests/*", "examples/*"]
 
 [tool.coverage.report]
