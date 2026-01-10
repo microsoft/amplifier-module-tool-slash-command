@@ -1,6 +1,7 @@
 """Execute custom slash commands with template substitution."""
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,9 @@ from .registry import CommandRegistry
 from .template_processor import TemplateProcessor
 
 logger = logging.getLogger(__name__)
+
+# Maximum recursion depth for command composition
+MAX_COMPOSITION_DEPTH = 5
 
 
 @dataclass
@@ -27,7 +31,21 @@ class ExecutionResult:
 
 
 class CommandExecutor:
-    """Executes custom slash commands."""
+    """Executes custom slash commands.
+
+    Supports command composition - commands can invoke other commands using
+    /command syntax in their templates.
+    """
+
+    # Pattern to detect /command invocations in templates
+    # Matches: /command, /command args, /namespace:command args
+    # Does not match: //escaped, URLs like http://
+    COMMAND_PATTERN = re.compile(
+        r"(?<![:/])/"  # Not preceded by : or / (avoid URLs and escapes)
+        r"([\w-]+(?::[\w-]+)?)"  # Command name, optionally with namespace
+        r"(?:\s+(.+?))?$",  # Optional arguments (to end of line)
+        re.MULTILINE,
+    )
 
     def __init__(
         self,
@@ -83,6 +101,7 @@ class CommandExecutor:
         args: str = "",
         namespace: str | None = None,
         process_advanced: bool = True,
+        _depth: int = 0,
     ) -> ExecutionResult:
         """Execute a custom command with full result details.
 
@@ -91,6 +110,7 @@ class CommandExecutor:
             args: Command arguments
             namespace: Optional namespace for disambiguation
             process_advanced: Whether to process bash/file refs
+            _depth: Internal recursion depth counter (for composition)
 
         Returns:
             ExecutionResult with prompt and metadata
@@ -98,6 +118,12 @@ class CommandExecutor:
         Raises:
             ValueError: If command not found or execution fails
         """
+        # Check recursion depth for command composition
+        if _depth > MAX_COMPOSITION_DEPTH:
+            raise ValueError(
+                f"Maximum command composition depth ({MAX_COMPOSITION_DEPTH}) exceeded. "
+                "Check for circular command references."
+            )
         # Look up command
         command = self.registry.get_command(command_name, namespace)
         if not command:
@@ -135,15 +161,23 @@ class CommandExecutor:
             if processed.warnings:
                 warnings.extend(processed.warnings)
 
-        # Step 3: Validate tool restrictions if specified
+        # Step 3: Process command composition (nested /command calls)
+        if process_advanced:
+            substituted, comp_warnings = await self._process_composition(
+                substituted, _depth
+            )
+            if comp_warnings:
+                warnings.extend(comp_warnings)
+
+        # Step 4: Validate tool restrictions if specified
         if command.metadata.allowed_tools:
             self._validate_tool_restrictions(command)
 
-        # Step 4: Check approval requirements
+        # Step 5: Check approval requirements
         requires_approval = getattr(command.metadata, "requires_approval", False)
         approval_message = getattr(command.metadata, "approval_message", None)
 
-        # Step 5: Apply character budget if specified
+        # Step 6: Apply character budget if specified
         if command.metadata.max_chars and len(substituted) > command.metadata.max_chars:
             original_len = len(substituted)
             substituted = self._apply_char_budget(
@@ -159,7 +193,7 @@ class CommandExecutor:
             f"{bash_count} bash, {files_count} files)"
         )
 
-        # Step 6: Get model override if specified
+        # Step 7: Get model override if specified
         model_override = command.metadata.model
 
         return ExecutionResult(
@@ -204,6 +238,80 @@ class CommandExecutor:
                 break
 
         return truncated.rstrip() + truncation_msg
+
+    async def _process_composition(
+        self, content: str, depth: int
+    ) -> tuple[str, list[str]]:
+        """Process nested /command invocations in content.
+
+        Args:
+            content: Template content that may contain /command calls
+            depth: Current recursion depth
+
+        Returns:
+            Tuple of (processed content, warnings)
+        """
+        warnings: list[str] = []
+
+        # Find all /command patterns
+        matches = list(self.COMMAND_PATTERN.finditer(content))
+        if not matches:
+            return content, warnings
+
+        logger.debug(f"Found {len(matches)} nested command(s) at depth {depth}")
+
+        # Process matches in reverse order to preserve positions
+        result = content
+        for match in reversed(matches):
+            command_spec = match.group(1)
+            args = match.group(2) or ""
+
+            # Parse namespace:command if present
+            if ":" in command_spec:
+                namespace, command_name = command_spec.split(":", 1)
+            else:
+                namespace = None
+                command_name = command_spec
+
+            # Check if command exists
+            cmd = self.registry.get_command(command_name, namespace)
+            if not cmd:
+                # Not a valid command - leave as-is (might be intentional text)
+                logger.debug(f"Skipping /{command_spec} - not a registered command")
+                continue
+
+            logger.info(
+                f"Executing nested command: /{command_spec} (depth={depth + 1})"
+            )
+
+            try:
+                # Execute nested command with incremented depth
+                nested_result = await self.execute_full(
+                    command_name,
+                    args.strip(),
+                    namespace,
+                    process_advanced=True,
+                    _depth=depth + 1,
+                )
+
+                # Replace the /command with its output
+                result = (
+                    result[: match.start()]
+                    + nested_result.prompt
+                    + result[match.end() :]
+                )
+
+                # Propagate warnings
+                if nested_result.warnings:
+                    warnings.extend(
+                        f"[/{command_spec}] {w}" for w in nested_result.warnings
+                    )
+
+            except ValueError as e:
+                warnings.append(f"Failed to execute /{command_spec}: {e}")
+                # Leave the original /command in place on error
+
+        return result, warnings
 
     def _validate_tool_restrictions(self, command: ParsedCommand) -> None:
         """Validate that command's tool restrictions are compatible with session.
