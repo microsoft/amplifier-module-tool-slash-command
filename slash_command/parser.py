@@ -17,6 +17,11 @@ class CommandMetadata:
     argument_hint: str | None = None
     model: str | None = None
     disable_model_invocation: bool = False
+    # Phase 2: Approval gates
+    requires_approval: bool = False
+    approval_message: str | None = None
+    # Phase 2: Character budget
+    max_chars: int | None = None
 
 
 @dataclass
@@ -111,12 +116,27 @@ class CommandParser:
         model = frontmatter.get("model")
         disable_model_invocation = frontmatter.get("disable-model-invocation", False) or frontmatter.get("disable_model_invocation", False)
 
+        # Phase 2: Approval gates
+        requires_approval = frontmatter.get("requires-approval", False) or frontmatter.get("requires_approval", False)
+        approval_message = frontmatter.get("approval-message") or frontmatter.get("approval_message")
+
+        # Phase 2: Character budget
+        max_chars = frontmatter.get("max-chars") or frontmatter.get("max_chars")
+        if max_chars is not None:
+            try:
+                max_chars = int(max_chars)
+            except (ValueError, TypeError):
+                raise ValueError(f"'max-chars' must be an integer in {file_path}")
+
         return CommandMetadata(
             description=description,
             allowed_tools=allowed_tools,
             argument_hint=argument_hint,
             model=model,
             disable_model_invocation=bool(disable_model_invocation),
+            requires_approval=bool(requires_approval),
+            approval_message=approval_message,
+            max_chars=max_chars,
         )
 
     def substitute_variables(self, template: str, args: str) -> str:
