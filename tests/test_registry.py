@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 from unittest.mock import Mock
-from slash_command.registry import CommandRegistry
+from amplifier_module_tool_slash_command.registry import CommandRegistry
 
 
 @pytest.fixture

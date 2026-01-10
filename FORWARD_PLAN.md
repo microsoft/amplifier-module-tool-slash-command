@@ -1,104 +1,74 @@
-# Forward Plan - Slash Command System Evolution
+# Forward Plan - Slash Command System
 
-## What We've Built
+> **Reference**: Aligned with [Claude Code Slash Commands](https://code.claude.com/docs/en/slash-commands) feature set
 
-✅ **Core Module Implementation**
-- Markdown-based command definition with YAML frontmatter
-- Command discovery from `.amplifier/commands/` and `~/.amplifier/commands/`
-- Template variable substitution (`$ARGUMENTS`, `$1`, `$2`, etc.)
-- Namespace support via subdirectories
-- Command registry with precedence (project > user)
-- Full test suite covering parser, loader, registry, executor
-- Example commands (review, test, security, optimize, explain, document)
+## Feature Comparison: Claude Code vs Amplifier
 
-✅ **Repository Setup**
-- Private GitHub repository: `robotdad/amplifier-module-tool-slash-command`
-- MIT License
-- Comprehensive README and documentation
-- Ready for integration testing
+| Feature | Claude Code | Amplifier Status |
+|---------|-------------|------------------|
+| **Core Features** | | |
+| Project commands (`.claude/commands/`) | Yes | Yes `.amplifier/commands/` |
+| Personal commands (`~/.claude/commands/`) | Yes | Yes `~/.amplifier/commands/` |
+| Namespacing via subdirectories | Yes | Yes |
+| Precedence (project > user) | Yes | Yes |
+| **Arguments** | | |
+| `$ARGUMENTS` (all args) | Yes | Yes |
+| `$1`, `$2`, etc. (positional) | Yes | Yes |
+| `{{$1 or "default"}}` fallbacks | Not documented | Yes |
+| **Template Processing** | | |
+| Bash execution `` !`command` `` | Yes | Yes (E2E verified) |
+| File references `@path` | Yes | Yes (code complete) |
+| **Frontmatter** | | |
+| `description` | Yes | Yes |
+| `argument-hint` | Yes | Yes |
+| `allowed-tools` (list) | Yes `[bash]` | Yes |
+| `allowed-tools` (granular) | Yes `Bash(git add:*)` | Phase 3 |
+| `model` (override) | Yes | Phase 4 |
+| `disable-model-invocation` | Yes | Phase 4 |
+| `hooks` (per-command) | Yes | **Use hooks-shell module** |
+| `max-chars` (char budget) | Yes (env var) | Yes (frontmatter) |
+| `requires-approval` | Not in Claude Code | Yes (our addition) |
+| **Advanced Features** | | |
+| Skill tool (LLM invokes commands) | Yes | Phase 4 |
+| Plugin commands | Yes | Phase 4 |
+| MCP slash commands | Yes | Phase 4 |
+| Character budget limit | Yes 15k default | Yes Per-command only |
+| Autocomplete anywhere in input | Yes | Not planned |
 
-## Phase 1: Integration & Validation (Week 1-2)
+---
 
-### 1.1 Amplifier-App-CLI Integration
+## Phase 1: Core Integration - COMPLETE
 
-**Goal**: Make custom commands available in the Amplifier REPL
+### 1.1 Core Module
+- [x] Markdown-based command definition with YAML frontmatter
+- [x] Command discovery from `.amplifier/commands/` and `~/.amplifier/commands/`
+- [x] Template variable substitution (`$ARGUMENTS`, `$1`, `$2`, etc.)
+- [x] Fallback syntax `{{$1 or "default"}}`
+- [x] Namespace support via subdirectories
+- [x] Command registry with precedence (project > user)
+- [x] Full test suite (29 tests)
 
-**Tasks**:
-- [ ] Modify `CommandProcessor` in `amplifier-app-cli/amplifier_app_cli/main.py` to accept dynamic command registration
-- [ ] Add `tool-slash-command` to foundation bundle as optional behavior
-- [ ] Load commands on session start via `slash_command_registry` capability
-- [ ] Merge custom commands into `CommandProcessor.COMMANDS` dict
-- [ ] Update `/help` command to show custom commands with descriptions
-- [ ] Add `/reload-commands` built-in command for development workflow
+### 1.2 CLI Integration
+- [x] Modify `CommandProcessor` in amplifier-app-cli
+- [x] Load commands on session start
+- [x] Merge custom commands into command processor
+- [x] Update `/help` to show custom commands with descriptions
+- [x] Add `/reload-commands` for development workflow
+- [x] README documentation
 
-**Implementation Pattern**:
-```python
-# In amplifier-app-cli main.py, after session creation:
-registry = coordinator.get_capability("slash_command_registry")
-if registry and registry.is_loaded():
-    custom_commands = registry.get_command_dict()
-    command_processor.register_dynamic_commands(custom_commands)
-```
+### 1.3 Frontmatter Support
+- [x] `description` - Brief description
+- [x] `argument-hint` - Shown in help/autocomplete
+- [x] `allowed-tools` - List of tools command can use
 
-**Testing**:
-- Create test commands in `.amplifier/commands/`
-- Verify discovery and loading
-- Test execution with arguments
-- Verify precedence (project > user)
-- Test namespace disambiguation
+---
 
-### 1.2 Command Execution Flow
+## Phase 2: Template Processing - COMPLETE
 
-**Goal**: Execute custom commands as prompts to the AI
+### 2.1 Bash Command Execution - COMPLETE
+Execute bash commands and substitute output into template.
 
-**Tasks**:
-- [ ] Implement `execute_custom_command` action in `CommandProcessor`
-- [ ] Use `slash_command_executor` capability to substitute template
-- [ ] Pass substituted prompt to `session.execute()`
-- [ ] Handle errors gracefully (command not found, substitution failures)
-
-**Implementation Pattern**:
-```python
-async def handle_command(self, action: str, data: dict):
-    if action == "execute_custom_command":
-        executor = self.session.coordinator.get_capability("slash_command_executor")
-        try:
-            prompt = await executor.execute(
-                data["metadata"]["name"],
-                data.get("args", ""),
-                namespace=data["metadata"]["namespace"]
-            )
-            # Execute the substituted prompt
-            await self.session.execute(prompt)
-        except ValueError as e:
-            return f"Error: {e}"
-```
-
-### 1.3 Documentation Updates
-
-**Tasks**:
-- [ ] Add section to `amplifier-app-cli` README about custom commands
-- [ ] Update user guide with command creation tutorial
-- [ ] Document frontmatter options and template syntax
-- [ ] Add troubleshooting section (common errors)
-- [ ] Create video walkthrough (optional but high value)
-
-### 1.4 Validation & Refinement
-
-**Tasks**:
-- [ ] Run amplifier-core validation: `amplifier-core validate tool .`
-- [ ] Integration test with real Amplifier session
-- [ ] Performance test (load 50+ commands)
-- [ ] Error handling edge cases
-- [ ] User feedback from early adopters
-
-## Phase 2: Enhanced Features (Week 3-4)
-
-### 2.1 Bash Command Execution
-
-**Goal**: Support `!` prefix for shell command execution
-
-**Syntax**:
+**Syntax:**
 ```markdown
 ---
 description: Create commit with context
@@ -108,388 +78,310 @@ allowed-tools: [bash]
 ## Current Status
 !`git status`
 
-## Recent Changes
+## Recent Changes  
 !`git diff HEAD`
 
 Based on the above, create an appropriate commit message.
 ```
 
-**Implementation**:
-- [ ] Extend parser to detect `!` prefix lines
-- [ ] Execute bash commands via `tool-bash`
-- [ ] Inject command output into template before substitution
-- [ ] Add security warnings to documentation
-- [ ] Require explicit `allowed-tools: [bash]` in frontmatter
+**Implementation:**
+- [x] Detect `` !`command` `` inline syntax
+- [x] Detect `` !```\ncommand\n``` `` block syntax
+- [x] Execute via subprocess with timeout
+- [x] Substitute output into template
+- [x] Require `allowed-tools: [bash]` in frontmatter
+- [x] Security: Skip execution if bash not in allowed-tools
+- [x] Unit tests (6 tests)
+- [x] E2E test with real LLM session
 
-**Security Considerations**:
-- Commands inherit session's bash tool permissions
-- Approval hooks can intercept for sensitive commands
-- User education on reviewing command files
-- Warning when loading commands with bash execution
+### 2.2 File References - CODE COMPLETE
+Include file contents in commands.
 
-### 2.2 File References (@mentions)
-
-**Goal**: Support `@` prefix for file content injection
-
-**Syntax**:
+**Syntax:**
 ```markdown
----
-description: Review specific files with context
----
+Review the implementation in @src/utils/helpers.js
 
-Review the following files for consistency:
-- @src/auth.py
-- @src/middleware.py
-- @tests/test_auth.py
-
-Focus on error handling patterns.
+Compare @src/old-version.js with @src/new-version.js
 ```
 
-**Implementation**:
-- [ ] Extend parser to detect `@` prefix
-- [ ] Use existing mention resolver from amplifier-app-cli
-- [ ] Load file contents and inject into template
-- [ ] Handle missing files gracefully
-- [ ] Respect file permissions and allowed paths
+**Implementation:**
+- [x] Detect `@path` syntax
+- [x] Load file contents
+- [x] Handle missing files gracefully
+- [x] Respect working directory boundaries
+- [x] Unit tests (4 tests)
+- [ ] E2E test with real LLM session
 
-### 2.3 Character Budget Limits
+### 2.3 Character Budget - CODE COMPLETE
+Prevent context overflow from large outputs.
 
-**Goal**: Prevent context overflow from too many commands
-
-**Implementation**:
-- [ ] Add configuration for max character budget (default 15k)
-- [ ] Count characters in command descriptions
-- [ ] Truncate or omit commands when budget exceeded
-- [ ] Warn user in `/help` when commands are hidden
-- [ ] Prioritize project commands over user commands
-
-### 2.4 Permission Controls
-
-**Goal**: Restrict sensitive commands with approval gates
-
-**Frontmatter Addition**:
+**Syntax:**
 ```yaml
+---
+max-chars: 8000
+---
+```
+
+**Implementation:**
+- [x] `max-chars` frontmatter field
+- [x] Truncate at sensible boundaries (paragraph > sentence > word)
+- [x] Add truncation indicator
+- [x] Warn when content truncated
+- [ ] E2E test with real LLM session
+
+### 2.4 Approval Gates - CODE COMPLETE
+Require approval for sensitive commands.
+
+**Syntax:**
+```yaml
+---
 requires-approval: true
-approval-message: "This command will modify production database. Proceed?"
+approval-message: "This will modify production. Proceed?"
+---
 ```
 
-**Implementation**:
-- [ ] Add `requires-approval` frontmatter field
-- [ ] Hook into existing approval system (hooks-approval)
-- [ ] Show approval dialog before execution
-- [ ] Log approval decisions
-- [ ] Document sensitive command patterns
+**Implementation:**
+- [x] `requires-approval` frontmatter field
+- [x] `approval-message` frontmatter field
+- [x] Return approval requirement in ExecutionResult
+- [ ] CLI integration to show approval dialog
+- [ ] E2E test with real LLM session
 
-## Phase 3: Ecosystem Integration (Week 5-6)
+### 2.5 Tool Module Integration - COMPLETE
+- [x] Package renamed to `amplifier_module_tool_slash_command`
+- [x] Tool protocol implementation (name, description, input_schema, execute)
+- [x] Entry point in pyproject.toml
+- [x] E2E test: Tool loads and LLM can invoke it
+- [x] 43 unit tests passing
 
-### 3.1 Foundation Bundle Integration
+---
 
-**Goal**: Make slash commands available to all Amplifier apps
+## Phase 3: Granular Permissions
 
-**Tasks**:
-- [ ] Create PR to amplifier-foundation with behavior definition
-- [ ] Add `tool-slash-command` as optional behavior
-- [ ] Include default commands in foundation
-- [ ] Update foundation documentation
+### 3.1 Granular Tool Permissions
+Align with Claude Code's fine-grained `allowed-tools`:
 
-**Bundle YAML**:
 ```yaml
-behaviors:
-  - name: slash-commands
-    description: Extensible custom slash commands
-    tools:
-      - module: tool-slash-command
-        source: git+https://github.com/robotdad/amplifier-module-tool-slash-command@main
+---
+description: Safe git operations only
+allowed-tools: 
+  - Bash(git add:*)
+  - Bash(git status:*)
+  - Bash(git commit:*)
+  - Bash(git diff:*)
+---
 ```
 
-### 3.2 Community Command Library
+**Implementation:**
+- [ ] Parse granular tool specifications `Tool(pattern:*)`
+- [ ] Validate bash commands against allowed patterns
+- [ ] Block execution if command doesn't match any pattern
+- [ ] Clear error messages when blocked
+- [ ] Unit tests
+- [ ] E2E tests
 
-**Goal**: Create a shared repository of useful commands
-
-**Structure**:
-```
-amplifier-commands/
-├── README.md
-├── development/
-│   ├── review.md
-│   ├── test.md
-│   ├── refactor.md
-├── security/
-│   ├── audit.md
-│   ├── scan-secrets.md
-├── documentation/
-│   ├── readme.md
-│   ├── api-docs.md
-└── productivity/
-    ├── summarize.md
-    ├── explain.md
+**Design:**
+```python
+@dataclass
+class GranularPermission:
+    tool: str           # "Bash", "Edit", etc.
+    pattern: str | None # "git add:*", None = all commands allowed
+    
+def parse_permission(spec: str) -> GranularPermission:
+    """Parse 'Bash(git add:*)' -> GranularPermission"""
+    # "Bash" -> GranularPermission(tool="Bash", pattern=None)
+    # "Bash(git add:*)" -> GranularPermission(tool="Bash", pattern="git add:*")
 ```
 
-**Tasks**:
-- [ ] Create `amplifier-commands` repository
-- [ ] Port example commands from module
-- [ ] Add installation instructions
-- [ ] Create contribution guidelines
-- [ ] Add quality criteria and review process
-- [ ] Set up GitHub Actions for validation
+---
 
-### 3.3 Discovery & Installation Flow
+## Phase 4: Advanced Features
 
-**Goal**: Make it easy to find and install community commands
-
-**CLI Commands**:
-```bash
-# Browse available commands
-amplifier commands browse
-
-# Install a command
-amplifier commands install github:community/review.md
-
-# Search commands
-amplifier commands search security
-
-# Update installed commands
-amplifier commands update
+### 4.1 Model Override
+```yaml
+model: claude-3-5-haiku-20241022
 ```
+- [ ] Parse model field
+- [ ] Override session model for command execution
+- [ ] Restore original model after
 
-**Implementation**:
-- [ ] Add `amplifier commands` subcommand group
-- [ ] Implement remote command fetching
-- [ ] Add local command cache (~/.amplifier/command-cache/)
-- [ ] Version tracking for installed commands
-- [ ] Update notifications
+### 4.2 Skill Tool (LLM Invokes Commands)
+Allow the LLM to programmatically invoke slash commands.
 
-### 3.4 App Developer Guide
+- [ ] Expose command metadata to LLM via tool
+- [ ] Handle `disable-model-invocation` flag
+- [ ] Respect character budget for command metadata
 
-**Goal**: Enable other Amplifier apps to use slash commands
-
-**Documentation**:
-- [ ] Integration guide for app developers
-- [ ] API reference for registry/executor
-- [ ] Example integration code
-- [ ] Best practices for app-specific commands
-- [ ] Testing strategies
-
-**Example Apps to Target**:
-- amplifier-app-transcribe (custom commands for video processing)
-- amplifier-app-blog-creator (content generation commands)
-- amplifier-app-voice (voice-specific commands)
-
-## Phase 4: Advanced Features (Week 7-8)
-
-### 4.1 Command Composition
-
-**Goal**: Allow commands to call other commands
-
-**Syntax**:
+### 4.3 Command Composition
 ```markdown
----
-description: Full code review workflow
----
-
 First, run security audit:
 /security $1
 
 Then, check code quality:
 /review $1
-
-Finally, verify test coverage:
-/test $1
 ```
-
-**Implementation**:
 - [ ] Detect slash commands in template
 - [ ] Execute commands sequentially
 - [ ] Aggregate results
-- [ ] Handle errors in chain
 - [ ] Prevent infinite recursion
 
-### 4.2 Model Selection per Command
+### 4.4 Plugin/Bundle Commands
+Commands provided by installed bundles.
 
-**Goal**: Use optimal model for each command type
+- [ ] Discover commands from bundle `commands/` directories
+- [ ] Namespace as `(bundle:name)`
+- [ ] Support `/bundle:command` invocation pattern
 
-**Current Frontmatter**:
-```yaml
-model: anthropic/haiku  # Fast, cheap model for simple tasks
+### 4.5 MCP Slash Commands
+Commands exposed from MCP servers.
+
+- [ ] Discover prompts from connected MCP servers
+- [ ] Expose as `/mcp__server__prompt` commands
+- [ ] Pass arguments to MCP prompts
+
+---
+
+## Phase 5: Ecosystem Integration (LAST)
+
+### 5.1 Foundation Bundle Integration
+- [ ] Create PR to amplifier-foundation with behavior definition
+- [ ] Add `tool-slash-command` as optional behavior
+- [ ] Include default commands in foundation
+- [ ] Update foundation documentation
+
+### 5.2 Community Command Library
+- [ ] Create `amplifier-commands` repository
+- [ ] Port example commands from module
+- [ ] Contribution guidelines
+- [ ] Quality criteria and review process
+
+---
+
+## Per-Command Hooks: Use hooks-shell Module
+
+**Note:** Per-command hooks are NOT implemented in this module. Instead, use the 
+[amplifier-module-hooks-shell](https://github.com/robotdad/amplifier-module-hooks-shell) module.
+
+The hooks-shell module provides:
+- Shell-based hooks at lifecycle points (PreToolUse, PostToolUse, etc.)
+- Regex pattern matching for selective execution
+- Claude Code format compatibility
+- Hooks embedded in frontmatter (skills, agents, commands)
+
+### Integration Pattern
+
+Slash commands that need hooks should document the required hooks-shell configuration:
+
+**Example: Command with validation hook**
+
+1. Create the slash command (`.amplifier/commands/deploy.md`):
+```markdown
+---
+description: Deploy to production
+allowed-tools: [bash]
+requires-approval: true
+---
+
+Deploy the current branch to production.
+
+!`./scripts/deploy.sh`
 ```
 
-**Enhancement**:
-```yaml
-model:
-  default: anthropic/haiku
-  fallback: anthropic/sonnet  # If haiku fails
-  reasoning: Use Haiku for speed; Sonnet if complexity detected
+2. Create the hook (`.amplifier/hooks/deploy-validator/hooks.json`):
+```json
+{
+  "description": "Validate deployment commands",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${AMPLIFIER_HOOKS_DIR}/deploy-validator/check.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
 
-**Implementation**:
-- [ ] Parse model configuration
-- [ ] Override session model temporarily
-- [ ] Restore original model after execution
-- [ ] Track model usage per command
-- [ ] Show model in command execution logs
-
-### 4.3 Command Versioning
-
-**Goal**: Track command versions and manage updates
-
-**Frontmatter Addition**:
+3. Add hooks-shell to your bundle:
 ```yaml
-version: 1.2.0
-changelog:
-  - 1.2.0: Added support for multiple file patterns
-  - 1.1.0: Improved error handling
-  - 1.0.0: Initial release
+hooks:
+  - module: hooks-shell
+    source: git+https://github.com/robotdad/amplifier-module-hooks-shell@main
 ```
 
-**Implementation**:
-- [ ] Add version field validation
-- [ ] Track installed command versions
-- [ ] Check for updates automatically
-- [ ] Show changelog on update
-- [ ] Support version pinning
+### Why Separate Modules?
 
-### 4.4 Command Analytics
+1. **Single Responsibility**: Slash commands handle template processing; hooks-shell handles lifecycle hooks
+2. **Reusability**: Hooks can be shared across commands, skills, and agents
+3. **Claude Code Compatibility**: hooks-shell uses the same format as Claude Code hooks
+4. **Already Implemented**: hooks-shell is mature with full test coverage
 
-**Goal**: Understand which commands are most valuable
+---
 
-**Metrics**:
-- Command invocation frequency
-- Average execution time
-- Success/failure rates
-- User ratings (optional feedback)
-- Model costs per command
+## Current Test Commands
 
-**Implementation**:
-- [ ] Hook into event system to track usage
-- [ ] Store metrics in local database
-- [ ] `/stats commands` to view analytics
-- [ ] Privacy-preserving aggregation
-- [ ] Export for community insights
+### Phase 1 Commands (basic templates)
+| Command | Description |
+|---------|-------------|
+| `/review` | Request comprehensive code review |
+| `/test` | Generate comprehensive unit tests |
+| `/security` | Perform security audit on code |
+| `/optimize` | Analyze for performance optimization |
+| `/explain` | Explain code in simple terms |
+| `/document` | Generate comprehensive documentation |
 
-## Phase 5: Polish & Optimization (Ongoing)
+### Phase 2 Commands (bash + file refs)
+| Command | Description | Features |
+|---------|-------------|----------|
+| `/context-dump` | Dump project context | `` !`bash` ``, `max-chars` |
+| `/diff-review` | Review git diff | `` !`bash` ``, `max-chars` |
+| `/file-review <file>` | Review file with history | `` !`bash` ``, `@file`, `max-chars` |
+| `/deps-audit` | Audit dependencies | `` !`bash` ``, `max-chars` |
 
-### 5.1 Performance Optimization
+### Workflow Commands
+| Command | Description |
+|---------|-------------|
+| `/standup` | Generate standup summary |
+| `/todo-scan` | Scan for TODO/FIXME comments |
+| `/deps-check` | Check for outdated dependencies |
 
-**Tasks**:
-- [ ] Lazy loading of commands (don't parse all at startup)
-- [ ] Command caching (parse once, cache result)
-- [ ] Parallel command discovery
-- [ ] Minimize file I/O
-- [ ] Benchmark and profile
+### GitHub Commands (namespaced)
+| Command | Description |
+|---------|-------------|
+| `/pr-activity` | Summarize recent PR activity |
+| `/stale-issues` | Find stale issues |
+| `/issues-no-comments` | Find uncommented issues |
 
-### 5.2 Error Messages & UX
+---
 
-**Tasks**:
-- [ ] Clear error messages with suggestions
-- [ ] Command validation on load (warn about issues)
-- [ ] Syntax highlighting in examples
-- [ ] Autocomplete support (if feasible)
-- [ ] Rich command help display
+## Repositories
 
-### 5.3 Testing & Quality
+| Repository | Purpose | Status |
+|------------|---------|--------|
+| `robotdad/amplifier-module-tool-slash-command` | Core module | Public, main branch |
+| `robotdad/amplifier-module-hooks-shell` | Shell hooks module | Public, main branch |
+| `robotdad/amplifier-app-cli` | Fork with CLI integration | Branch: `feat/custom-slash-commands` |
 
-**Tasks**:
-- [ ] Increase test coverage to 95%+
-- [ ] Add integration tests with real Amplifier session
-- [ ] Performance benchmarks
-- [ ] Compatibility testing across platforms
-- [ ] Security audit
-
-### 5.4 Community Building
-
-**Tasks**:
-- [ ] Blog post announcing feature
-- [ ] Video tutorial series
-- [ ] Community call for feedback
-- [ ] Showcase impressive community commands
-- [ ] Contributor recognition
-
-## Success Metrics
-
-### Technical Metrics
-- **Module Quality**: 95%+ test coverage, passes all validation
-- **Performance**: <100ms command discovery, <10ms substitution
-- **Reliability**: <1% error rate in production use
-- **Compatibility**: Works with all Amplifier providers and orchestrators
-
-### Adoption Metrics
-- **Usage**: 50%+ of active users create custom commands
-- **Community**: 100+ shared commands in community library
-- **Integration**: 5+ community apps integrate slash commands
-- **Feedback**: 4.5+ star rating from users
-
-### Business Metrics
-- **Differentiation**: Unique feature vs. competitors
-- **Retention**: Increased user retention (hypothesis: yes)
-- **Ecosystem**: More community modules and apps built
-- **Support**: Reduced support tickets (self-service via commands)
-
-## Risk Management
-
-### Technical Risks
-- **Context Overflow**: Mitigated by character budget limits
-- **Security**: Mitigated by tool restrictions and approval hooks
-- **Performance**: Mitigated by lazy loading and caching
-- **Compatibility**: Mitigated by strict protocol compliance
-
-### Adoption Risks
-- **Discoverability**: Mitigated by good documentation and examples
-- **Complexity**: Mitigated by simple starting point and gradual feature addition
-- **Quality**: Mitigated by community review process
-- **Abandonment**: Mitigated by making it part of foundation
-
-## Timeline Summary
-
-| Phase | Duration | Key Deliverables |
-|-------|----------|------------------|
-| Phase 1 | 2 weeks | Working integration with amplifier-app-cli |
-| Phase 2 | 2 weeks | Bash execution, file references, permissions |
-| Phase 3 | 2 weeks | Foundation integration, community library |
-| Phase 4 | 2 weeks | Advanced features (composition, versioning) |
-| Phase 5 | Ongoing | Optimization, community building |
-
-**Total: 8 weeks to full feature set, with ongoing improvements**
+---
 
 ## Immediate Next Steps
 
-1. **Test the module** (blocked on local testing environment)
-   - Set up venv: `python3 -m venv .venv`
-   - Install deps: `source .venv/bin/activate && pip install -e ".[dev]"`
-   - Run tests: `pytest -v`
+1. **Complete Phase 2 E2E tests** - file refs, max-chars, approval gates
+2. **Implement Phase 3** - Granular permissions `Bash(git add:*)`
+3. **Phase 4 features** - Model override, skill tool, command composition
+4. **Phase 5** - Foundation integration (deferred until after Phase 4)
 
-2. **Create integration branch in amplifier-app-cli**
-   - Fork/clone amplifier-app-cli
-   - Create feature branch: `feature/slash-commands`
-   - Implement CommandProcessor changes
-
-3. **Write integration guide**
-   - Document how app developers integrate
-   - Provide code examples
-   - List common patterns
-
-4. **Create demo video**
-   - Show command creation workflow
-   - Demonstrate execution
-   - Highlight use cases
-
-5. **Get early feedback**
-   - Share with amplifier-core maintainers
-   - Test with 3-5 early adopters
-   - Iterate based on feedback
+---
 
 ## Open Questions
 
-1. **Module Hosting**: Should this move to `microsoft/amplifier-module-tool-slash-command` or stay under `robotdad`?
-2. **Foundation Integration**: Should slash commands be part of the default foundation bundle or opt-in?
-3. **Community Library Governance**: Who reviews and approves community commands?
-4. **Pricing/Cost**: How do we handle model costs for frequently-run commands?
-5. **Privacy**: What telemetry (if any) is acceptable for command usage?
-
-## Conclusion
-
-The slash command system provides a powerful extensibility mechanism that empowers users to customize their Amplifier experience. By following this phased approach, we can deliver value incrementally while building toward a rich ecosystem of shared commands.
-
-The implementation is complete and ready for integration testing. The forward path focuses on integration with amplifier-app-cli, enhancement with advanced features, and ecosystem adoption through community engagement.
-
-**Repository**: https://github.com/robotdad/amplifier-module-tool-slash-command (private)
-**Status**: ✅ Ready for Phase 1 integration
+1. ~~Should we support Claude Code's granular `Bash(git add:*)` syntax?~~ **YES - Phase 3**
+2. Should commands be discoverable by the LLM (Skill tool pattern)? **Phase 4.2**
+3. Should we add MCP slash command support? **Phase 4.5**
+4. Where should this module live? (`robotdad` vs `microsoft`) **TBD**
