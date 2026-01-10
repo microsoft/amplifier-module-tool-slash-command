@@ -22,6 +22,8 @@ class ExecutionResult:
     files_included: int = 0
     requires_approval: bool = False
     approval_message: str | None = None
+    # Phase 4: Model override
+    model_override: str | None = None
 
 
 class CommandExecutor:
@@ -70,7 +72,9 @@ class CommandExecutor:
         Raises:
             ValueError: If command not found or execution fails
         """
-        result = await self.execute_full(command_name, args, namespace, process_advanced)
+        result = await self.execute_full(
+            command_name, args, namespace, process_advanced
+        )
         return result.prompt
 
     async def execute_full(
@@ -142,7 +146,9 @@ class CommandExecutor:
         # Step 5: Apply character budget if specified
         if command.metadata.max_chars and len(substituted) > command.metadata.max_chars:
             original_len = len(substituted)
-            substituted = self._apply_char_budget(substituted, command.metadata.max_chars)
+            substituted = self._apply_char_budget(
+                substituted, command.metadata.max_chars
+            )
             warnings.append(
                 f"Content truncated from {original_len} to {len(substituted)} chars "
                 f"(max-chars: {command.metadata.max_chars})"
@@ -153,6 +159,9 @@ class CommandExecutor:
             f"{bash_count} bash, {files_count} files)"
         )
 
+        # Step 6: Get model override if specified
+        model_override = command.metadata.model
+
         return ExecutionResult(
             prompt=substituted,
             warnings=warnings if warnings else None,
@@ -160,6 +169,7 @@ class CommandExecutor:
             files_included=files_count,
             requires_approval=requires_approval,
             approval_message=approval_message,
+            model_override=model_override,
         )
 
     def _apply_char_budget(self, content: str, max_chars: int) -> str:
@@ -190,7 +200,7 @@ class CommandExecutor:
         for sep in ["\n\n", "\n", ". ", " "]:
             last_sep = truncated.rfind(sep)
             if last_sep > available * 0.7:  # Don't cut too much
-                truncated = truncated[:last_sep + len(sep)]
+                truncated = truncated[: last_sep + len(sep)]
                 break
 
         return truncated.rstrip() + truncation_msg

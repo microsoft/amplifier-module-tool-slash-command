@@ -48,17 +48,23 @@ class SlashCommandTool:
         return {
             "type": "object",
             "properties": {
+                "operation": {
+                    "type": "string",
+                    "enum": ["execute", "list"],
+                    "description": "Operation: 'execute' to run a command, 'list' to discover available commands",
+                    "default": "execute",
+                },
                 "command": {
                     "type": "string",
-                    "description": "Command name (without leading /)",
+                    "description": "Command name (without leading /) - required for 'execute'",
                 },
                 "args": {
                     "type": "string",
-                    "description": "Optional command arguments",
+                    "description": "Optional command arguments for 'execute'",
                     "default": "",
                 },
             },
-            "required": ["command"],
+            "required": [],
         }
 
     @property
@@ -72,17 +78,64 @@ class SlashCommandTool:
         return self._executor
 
     async def execute(self, input: dict[str, Any]) -> Any:
-        """Execute a custom slash command.
+        """Execute a slash command operation.
 
         Args:
-            input: Dictionary with 'command' (required) and 'args' (optional)
+            input: Dictionary with:
+                - operation: 'execute' (default) or 'list'
+                - command: Command name (for 'execute')
+                - args: Optional arguments (for 'execute')
 
         Returns:
-            ToolResult with the substituted prompt
+            ToolResult with operation result
         """
         # Import here to avoid circular dependency at module level
         from amplifier_core.models import ToolResult  # type: ignore[import-not-found]
 
+        operation = input.get("operation", "execute")
+
+        if operation == "list":
+            return await self._list_commands(ToolResult)
+
+        # Default: execute command
+        return await self._execute_command(input, ToolResult)
+
+    async def _list_commands(self, ToolResult: type) -> Any:
+        """List available commands for LLM discovery.
+
+        Filters out commands with disable_model_invocation=True.
+        """
+        commands = []
+
+        for cmd in self._registry.list_commands():
+            # Skip commands that disable model invocation
+            if cmd.metadata.disable_model_invocation:
+                continue
+
+            cmd_info = {
+                "name": cmd.name,
+                "description": cmd.metadata.description,
+            }
+
+            # Add optional metadata
+            if cmd.metadata.argument_hint:
+                cmd_info["argument_hint"] = cmd.metadata.argument_hint
+            if cmd.namespace:
+                cmd_info["namespace"] = cmd.namespace
+
+            commands.append(cmd_info)
+
+        return ToolResult(
+            success=True,
+            output={
+                "commands": commands,
+                "count": len(commands),
+                "hint": "Use operation='execute' with command='name' to run a command",
+            },
+        )
+
+    async def _execute_command(self, input: dict[str, Any], ToolResult: type) -> Any:
+        """Execute a specific slash command."""
         command = input.get("command", "")
         args = input.get("args", "")
 
@@ -92,13 +145,42 @@ class SlashCommandTool:
         if not command:
             return ToolResult(
                 success=False,
-                error={"message": "No command specified"},
+                error={
+                    "message": "No command specified. Use operation='list' to see available commands."
+                },
+            )
+
+        # Check if command exists and allows model invocation
+        cmd = self._registry.get_command(command)
+        if cmd and cmd.metadata.disable_model_invocation:
+            return ToolResult(
+                success=False,
+                error={
+                    "message": f"Command '{command}' does not allow model invocation"
+                },
             )
 
         try:
-            # Execute command (returns substituted template)
-            prompt = await self._executor.execute(command, args)
-            return ToolResult(success=True, output=prompt)
+            # Execute command with full result details
+            result = await self._executor.execute_full(command, args)
+
+            # Build output with metadata
+            output = {
+                "prompt": result.prompt,
+                "bash_commands_executed": result.bash_commands_executed,
+                "files_included": result.files_included,
+            }
+
+            # Add optional fields if present
+            if result.warnings:
+                output["warnings"] = result.warnings
+            if result.requires_approval:
+                output["requires_approval"] = result.requires_approval
+                output["approval_message"] = result.approval_message
+            if result.model_override:
+                output["model_override"] = result.model_override
+
+            return ToolResult(success=True, output=output)
         except ValueError as e:
             return ToolResult(success=False, error={"message": str(e)})
         except Exception as e:
