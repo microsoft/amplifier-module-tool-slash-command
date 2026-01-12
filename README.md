@@ -77,8 +77,53 @@ In the Amplifier REPL:
 The module automatically discovers commands from:
 1. `.amplifier/commands/` (project-scoped, version controlled)
 2. `~/.amplifier/commands/` (user-scoped, personal)
+3. **Git URL sources** (shared command repos, configured in bundle)
 
 Commands are registered when the session starts.
+
+### Git URL Command Sources
+
+Share commands across projects by referencing git repositories in your bundle:
+
+```yaml
+tools:
+  - module: tool-slash-command
+    source: git+https://github.com/microsoft/amplifier-module-tool-slash-command@main
+    config:
+      commands:
+        - git+https://github.com/org/shared-commands@v1
+        - git+https://github.com/team/review-tools@main
+```
+
+**With subpath** (commands in a subdirectory):
+
+```yaml
+config:
+  commands:
+    - git+https://github.com/org/monorepo@main:amplifier-commands
+```
+
+Commands are **lazily fetched** - cloned and cached on first use to `~/.amplifier/cache/commands/`.
+
+**Command repo requirements:**
+- Must contain a `.amplifier-commands` marker file (can be in root or subpath)
+- Command `.md` files discovered recursively from that location
+
+**Example command repo structure:**
+
+```
+shared-commands/
+├── .amplifier-commands    # Marker file (can contain documentation)
+├── review.md
+├── deploy.md
+└── team/
+    └── standup.md
+```
+
+**Precedence** (highest to lowest):
+1. Project commands (`.amplifier/commands/`)
+2. User commands (`~/.amplifier/commands/`)
+3. Git URL commands (in order listed)
 
 ## Command Format
 
@@ -322,7 +367,8 @@ amplifier_module_tool_slash_command/
 ├── executor.py           # Executes commands with substitution
 ├── registry.py           # Command registry management
 ├── template_processor.py # Bash execution, file refs
-└── permissions.py        # Granular permission parsing
+├── permissions.py        # Granular permission parsing
+└── git_fetcher.py        # Lazy fetch/cache for git URL sources
 ```
 
 ### Integration Pattern
@@ -421,7 +467,7 @@ amplifier-core validate tool .
 
 ## Roadmap
 
-- [ ] Bundle/plugin commands (discover from installed bundles)
+- [x] Git URL command sources (shared commands from git repos)
 - [ ] MCP prompt integration (expose MCP prompts as commands)
 - [ ] Command marketplace (shared command repository)
 - [ ] Command versioning (semantic versioning for commands)
