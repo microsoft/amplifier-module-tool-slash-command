@@ -214,9 +214,17 @@ async def mount(coordinator: Any, config: dict[str, Any]) -> Any:
     if user_dir:
         user_dir = Path(user_dir)
 
-    # Discover and load commands
+    # Get git URLs for command repos from config
+    # Bundle config can specify: commands: ["git+https://github.com/org/repo@v1", ...]
+    command_urls = config.get("commands", [])
+    if isinstance(command_urls, str):
+        command_urls = [command_urls]
+
+    # Discover and load commands (including from git URLs if configured)
     try:
-        count = registry.discover_and_load(project_dir=project_dir, user_dir=user_dir)
+        count = registry.discover_and_load(
+            project_dir=project_dir, user_dir=user_dir, command_urls=command_urls
+        )
         logger.info(f"Loaded {count} custom command(s)")
     except Exception as e:
         logger.error(f"Failed to load commands: {e}")

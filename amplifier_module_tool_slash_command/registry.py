@@ -25,48 +25,74 @@ class CommandRegistry:
         self._loaded = False
 
     def discover_and_load(
-        self, project_dir: Path | None = None, user_dir: Path | None = None
+        self,
+        project_dir: Path | None = None,
+        user_dir: Path | None = None,
+        command_urls: list[str] | None = None,
     ) -> int:
-        """Discover and load all commands from standard locations.
+        """Discover and load all commands from standard locations and git URLs.
+
+        Priority order (highest to lowest):
+        1. Project commands (.amplifier/commands/)
+        2. User commands (~/.amplifier/commands/)
+        3. Git URL commands (declared in bundle config)
 
         Args:
             project_dir: Project root (uses cwd if None)
             user_dir: User home (uses Path.home() if None)
+            command_urls: List of git URLs to fetch commands from
 
         Returns:
             Number of commands loaded
         """
+        # Track seen commands for precedence
+        seen_commands: set[tuple[str, str | None]] = set()
+
+        # Load project and user commands first (higher precedence)
         commands = self.loader.discover_commands(project_dir, user_dir)
 
-        # Store in registry
+        # Store in registry and track seen
         self.commands.clear()
         for cmd in commands:
-            # Use (name, namespace) as key for uniqueness
             key = self._make_key(cmd.name, cmd.namespace)
             self.commands[key] = cmd
+            seen_commands.add((cmd.name, cmd.namespace))
+
+        # Load git URL commands (lower precedence)
+        if command_urls:
+            git_commands = self.loader.load_from_git_urls(command_urls, seen_commands)
+            for cmd in git_commands:
+                key = self._make_key(cmd.name, cmd.namespace)
+                self.commands[key] = cmd
 
         self._loaded = True
         logger.info(f"Command registry loaded {len(self.commands)} command(s)")
         return len(self.commands)
 
     def reload(
-        self, project_dir: Path | None = None, user_dir: Path | None = None
+        self,
+        project_dir: Path | None = None,
+        user_dir: Path | None = None,
+        command_urls: list[str] | None = None,
     ) -> int:
-        """Reload all commands from filesystem.
+        """Reload all commands from filesystem and git URLs.
 
         Useful for development when commands are modified without restarting session.
 
         Args:
             project_dir: Project root (uses cwd if None)
             user_dir: User home (uses Path.home() if None)
+            command_urls: List of git URLs to fetch commands from
 
         Returns:
             Number of commands loaded
         """
         logger.info("Reloading command registry...")
-        return self.discover_and_load(project_dir, user_dir)
+        return self.discover_and_load(project_dir, user_dir, command_urls)
 
-    def get_command(self, name: str, namespace: str | None = None) -> ParsedCommand | None:
+    def get_command(
+        self, name: str, namespace: str | None = None
+    ) -> ParsedCommand | None:
         """Get a command by name and optional namespace.
 
         Args:
@@ -96,7 +122,9 @@ class CommandRegistry:
         names = []
         for cmd in self.commands.values():
             if cmd.namespace:
-                names.append(f"{cmd.name} ({getattr(cmd, 'scope', 'user')}:{cmd.namespace})")
+                names.append(
+                    f"{cmd.name} ({getattr(cmd, 'scope', 'user')}:{cmd.namespace})"
+                )
             else:
                 names.append(f"{cmd.name} ({getattr(cmd, 'scope', 'user')})")
         return sorted(names)

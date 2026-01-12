@@ -1,5 +1,7 @@
 """Discover and load command files from filesystem."""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 
@@ -143,3 +145,66 @@ class CommandLoader:
             ValueError: If file is invalid
         """
         return self.parser.parse_file(file_path, namespace=namespace)
+
+    def load_from_git_urls(
+        self,
+        urls: list[str],
+        seen_commands: set[tuple[str, str | None]] | None = None,
+    ) -> list[ParsedCommand]:
+        """Load commands from git repository URLs.
+
+        Implements lazy acquisition: fetches and caches repos as needed.
+        Repos must have a .amplifier-commands marker file.
+
+        Args:
+            urls: List of git URLs like "git+https://github.com/org/repo@v1"
+            seen_commands: Set of (name, namespace) tuples to skip (for precedence)
+
+        Returns:
+            List of ParsedCommand instances from the repos
+        """
+        from .git_fetcher import GitCommandFetcher
+
+        if seen_commands is None:
+            seen_commands = set()
+
+        commands = []
+        fetcher = GitCommandFetcher()
+
+        for url in urls:
+            # Fetch (or get from cache) the repo
+            repo_path = fetcher.fetch(url)
+            if repo_path is None:
+                logger.warning(f"Failed to fetch command repo: {url}")
+                continue
+
+            # Derive namespace from repo name (or subpath if specified)
+            # e.g., "git+https://github.com/org/repo@v1:commands" -> "commands"
+            # e.g., "git+https://github.com/org/shared-commands@v1" -> "shared-commands"
+            git_url, _, subpath = fetcher.parse_git_url(url)
+            if subpath:
+                # Use the subpath name as namespace
+                namespace = subpath.rstrip("/").split("/")[-1]
+            else:
+                # Use repo name as namespace
+                namespace = git_url.rstrip("/").split("/")[-1]
+
+            # Load commands from the repo
+            repo_commands = self._load_from_directory(
+                repo_path, scope=f"git:{namespace}", namespace=namespace
+            )
+
+            for cmd in repo_commands:
+                key = (cmd.name, cmd.namespace)
+                if key not in seen_commands:
+                    commands.append(cmd)
+                    seen_commands.add(key)
+                else:
+                    logger.debug(
+                        f"Skipping git command '{cmd.name}' (namespace: {namespace}) - "
+                        f"overridden by higher-precedence command"
+                    )
+
+            logger.info(f"Loaded {len(repo_commands)} command(s) from {url}")
+
+        return commands
