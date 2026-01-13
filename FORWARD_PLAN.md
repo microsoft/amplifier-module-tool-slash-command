@@ -260,7 +260,7 @@ Commands exposed from MCP servers.
 ## Per-Command Hooks: Use hooks-shell Module
 
 **Note:** Per-command hooks are NOT implemented in this module. Instead, use the 
-[amplifier-module-hooks-shell](https://github.com/robotdad/amplifier-module-hooks-shell) module.
+[amplifier-module-hook-shell](https://github.com/microsoft/amplifier-module-hook-shell) module.
 
 The hooks-shell module provides:
 - Shell-based hooks at lifecycle points (PreToolUse, PostToolUse, etc.)
@@ -312,7 +312,7 @@ Deploy the current branch to production.
 ```yaml
 hooks:
   - module: hooks-shell
-    source: git+https://github.com/robotdad/amplifier-module-hooks-shell@main
+    source: git+https://github.com/microsoft/amplifier-module-hook-shell@main
 ```
 
 ### Why Separate Modules?
@@ -364,8 +364,8 @@ hooks:
 
 | Repository | Purpose | Status |
 |------------|---------|--------|
-| `robotdad/amplifier-module-tool-slash-command` | Core module | Public, main branch |
-| `robotdad/amplifier-module-hooks-shell` | Shell hooks module | Public, main branch |
+| `microsoft/amplifier-module-tool-slash-command` | Core module | Public, main branch |
+| `microsoft/amplifier-module-hook-shell` | Shell hooks module | Public, main branch |
 | `robotdad/amplifier-app-cli` | Fork with CLI integration | Branch: `feat/custom-slash-commands` |
 
 ---
@@ -384,4 +384,4 @@ hooks:
 1. ~~Should we support Claude Code's granular `Bash(git add:*)` syntax?~~ **YES - Phase 3**
 2. Should commands be discoverable by the LLM (Skill tool pattern)? **Phase 4.2**
 3. Should we add MCP slash command support? **Phase 4.5**
-4. Where should this module live? (`robotdad` vs `microsoft`) **TBD**
+4. Where should this module live? Now in `microsoft` org

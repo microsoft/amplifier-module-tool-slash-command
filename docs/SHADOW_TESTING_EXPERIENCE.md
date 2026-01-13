@@ -24,7 +24,7 @@ Created `amplifier-module-tool-slash-command`, an extensible slash command syste
 ```bash
 shadow create \
   --name slash-command-test \
-  --local-sources amplifier-module-tool-slash-command:robotdad/amplifier-module-tool-slash-command \
+  --local-sources amplifier-module-tool-slash-command:microsoft/amplifier-module-tool-slash-command \
   --local-sources amplifier-core:microsoft/amplifier-core
 ```
 
@@ -34,8 +34,8 @@ shadow create \
 
 Inside the shadow, git config showed:
 ```
-url.http://localhost:3000/robotdad/amplifier-module-tool-slash-command.git
-    .insteadOf=https://github.com/robotdad/amplifier-module-tool-slash-command
+url.http://localhost:3000/microsoft/amplifier-module-tool-slash-command.git
+    .insteadOf=https://github.com/microsoft/amplifier-module-tool-slash-command
 ```
 
 This means `git clone https://github.com/robotdad/...` fetches from the **local snapshot**, not GitHub.
@@ -44,7 +44,7 @@ This means `git clone https://github.com/robotdad/...` fetches from the **local 
 
 ```bash
 # Clone module (uses local snapshot)
-git clone https://github.com/robotdad/amplifier-module-tool-slash-command
+git clone https://github.com/microsoft/amplifier-module-tool-slash-command
 
 # Install amplifier-core (also uses local snapshot)
 uv pip install "git+https://github.com/microsoft/amplifier-core"

@@ -4,7 +4,7 @@ This guide shows how to test the experimental slash command system using Amplifi
 
 ## What You're Testing
 
-- **Slash Command Module**: `robotdad/amplifier-module-tool-slash-command` (public)
+- **Slash Command Module**: `microsoft/amplifier-module-tool-slash-command` (public)
 - **Modified CLI**: `robotdad/amplifier-app-cli@feat/custom-slash-commands`
 
 The modified CLI integrates with the slash command module to provide extensible `/commands` in interactive sessions.
@@ -21,7 +21,7 @@ Ask Amplifier to set up a test environment:
 
 ```
 Create a shadow environment to test the slash command system from 
-robotdad/amplifier-module-tool-slash-command with the modified CLI 
+microsoft/amplifier-module-tool-slash-command with the modified CLI 
 from robotdad/amplifier-app-cli@feat/custom-slash-commands
 ```
 
@@ -47,7 +47,7 @@ shadow exec slash-test "uv tool install 'git+https://github.com/robotdad/amplifi
 ```bash
 # Copy example commands to user directory
 shadow exec slash-test "
-  git clone https://github.com/robotdad/amplifier-module-tool-slash-command /tmp/slash-cmd
+  git clone https://github.com/microsoft/amplifier-module-tool-slash-command /tmp/slash-cmd
   mkdir -p ~/.amplifier/commands
   cp -r /tmp/slash-cmd/examples/commands/* ~/.amplifier/commands/
 "

@@ -9,7 +9,7 @@ includes:
 
 tools:
   - module: tool-slash-command
-    source: git+https://github.com/robotdad/amplifier-module-tool-slash-command@main
+    source: git+https://github.com/microsoft/amplifier-module-tool-slash-command@main
 ---
 
 # Slash Commands Demo Bundle
