@@ -1,0 +1,16 @@
+bundle:
+  name: slash-command-behavior
+  version: 1.0.0
+  description: Extensible slash commands for interactive CLI sessions
+
+tools:
+  - module: tool-slash-command
+    source: git+https://github.com/microsoft/amplifier-module-tool-slash-command@main
+    config:
+      # Slash command configuration
+      # Commands are discovered from:
+      #   - .amplifier/commands/ (workspace)
+      #   - ~/.amplifier/commands/ (user home)
+      
+      # Enable/disable the slash command tool (default: true)
+      enabled: true
