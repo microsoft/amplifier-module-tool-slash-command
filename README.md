@@ -27,14 +27,14 @@ Add to your bundle:
 ```yaml
 tools:
   - module: tool-slash-command
-    source: git+https://github.com/robotdad/amplifier-module-tool-slash-command@main
+    source: git+https://github.com/microsoft/amplifier-module-tool-slash-command@main
 ```
 
 Or install directly:
 
 ```bash
 amplifier module add tool-slash-command \
-  --source git+https://github.com/robotdad/amplifier-module-tool-slash-command@main
+  --source git+https://github.com/microsoft/amplifier-module-tool-slash-command@main
 ```
 
 ## Usage
@@ -445,7 +445,7 @@ registry.reload()
 ### Setup
 
 ```bash
-git clone https://github.com/robotdad/amplifier-module-tool-slash-command
+git clone https://github.com/microsoft/amplifier-module-tool-slash-command
 cd amplifier-module-tool-slash-command
 uv venv
 source .venv/bin/activate
