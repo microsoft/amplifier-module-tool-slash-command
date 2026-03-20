@@ -33,6 +33,7 @@ class ParsedCommand:
     template: str
     source_file: Path
     namespace: str | None = None
+    scope: str = "user"
 
 
 class CommandParser:
@@ -45,7 +46,9 @@ class CommandParser:
     VARIABLE_PATTERN = re.compile(r"\{\{(\$\d+|\$ARGUMENTS)\s+or\s+\"([^\"]*)\"\}\}")
     SIMPLE_VARIABLE_PATTERN = re.compile(r"\$(\d+|\bARGUMENTS\b)")
 
-    def parse_file(self, file_path: Path, namespace: str | None = None) -> ParsedCommand:
+    def parse_file(
+        self, file_path: Path, namespace: str | None = None
+    ) -> ParsedCommand:
         """Parse a command file.
 
         Args:
@@ -105,20 +108,32 @@ class CommandParser:
         # Description is required
         description = frontmatter.get("description")
         if not description:
-            raise ValueError(f"Command missing 'description' in frontmatter: {file_path}")
+            raise ValueError(
+                f"Command missing 'description' in frontmatter: {file_path}"
+            )
 
         # Optional fields
-        allowed_tools = frontmatter.get("allowed-tools") or frontmatter.get("allowed_tools")
+        allowed_tools = frontmatter.get("allowed-tools") or frontmatter.get(
+            "allowed_tools"
+        )
         if allowed_tools and not isinstance(allowed_tools, list):
             raise ValueError(f"'allowed-tools' must be a list in {file_path}")
 
-        argument_hint = frontmatter.get("argument-hint") or frontmatter.get("argument_hint")
+        argument_hint = frontmatter.get("argument-hint") or frontmatter.get(
+            "argument_hint"
+        )
         model = frontmatter.get("model")
-        disable_model_invocation = frontmatter.get("disable-model-invocation", False) or frontmatter.get("disable_model_invocation", False)
+        disable_model_invocation = frontmatter.get(
+            "disable-model-invocation", False
+        ) or frontmatter.get("disable_model_invocation", False)
 
         # Phase 2: Approval gates
-        requires_approval = frontmatter.get("requires-approval", False) or frontmatter.get("requires_approval", False)
-        approval_message = frontmatter.get("approval-message") or frontmatter.get("approval_message")
+        requires_approval = frontmatter.get(
+            "requires-approval", False
+        ) or frontmatter.get("requires_approval", False)
+        approval_message = frontmatter.get("approval-message") or frontmatter.get(
+            "approval_message"
+        )
 
         # Phase 2: Character budget
         max_chars = frontmatter.get("max-chars") or frontmatter.get("max_chars")

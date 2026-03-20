@@ -164,6 +164,15 @@ class CommandRegistry:
 
         return result
 
+    def add_command(self, cmd: ParsedCommand) -> None:
+        """Add a command to the registry.
+
+        Args:
+            cmd: Parsed command to register
+        """
+        key = self._make_key(cmd.name, cmd.namespace)
+        self.commands[key] = cmd
+
     def _make_key(self, name: str, namespace: str | None) -> str:
         """Create registry key from name and namespace.
 

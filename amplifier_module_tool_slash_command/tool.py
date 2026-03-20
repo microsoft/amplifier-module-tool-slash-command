@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .executor import CommandExecutor
+from .parser import CommandMetadata, ParsedCommand
 from .registry import CommandRegistry
 
 logger = logging.getLogger(__name__)
@@ -253,8 +254,6 @@ async def mount(coordinator: Any, config: dict[str, Any]) -> Any:
     # File-based commands take precedence (checked via get_command).
     async def on_skill_command_registered(event_data: dict) -> None:
         """Register a skill as a slash command if no file-based command exists."""
-        from .parser import CommandMetadata, ParsedCommand
-
         skill_name = event_data.get("skill_name", "")
         description = event_data.get("description", "")
         disable_model_invocation = event_data.get("disable_model_invocation", False)
@@ -284,12 +283,11 @@ async def mount(coordinator: Any, config: dict[str, Any]) -> Any:
             template=f'load_skill(skill_name="{skill_name}") $ARGUMENTS',
             source_file=Path(f"skill://{skill_name}"),
             namespace=None,
+            scope="skill",
         )
-        cmd.scope = "skill"  # type: ignore[attr-defined]
 
         # Register in the registry
-        key = registry._make_key(skill_name, None)
-        registry.commands[key] = cmd
+        registry.add_command(cmd)
         logger.info(f"Registered skill '{skill_name}' as slash command")
 
     coordinator.hooks.register(
