@@ -252,11 +252,11 @@ async def mount(coordinator: Any, config: dict[str, Any]) -> Any:
     # Register hook listener for skill:command_registered
     # Skills that emit this event want to register as slash commands.
     # File-based commands take precedence (checked via get_command).
-    async def on_skill_command_registered(event_data: dict) -> None:
+    async def on_skill_command_registered(event: str, data: dict[str, Any]) -> None:
         """Register a skill as a slash command if no file-based command exists."""
-        skill_name = event_data.get("skill_name", "")
-        description = event_data.get("description", "")
-        disable_model_invocation = event_data.get("disable_model_invocation", False)
+        skill_name = data.get("skill_name", "")
+        description = data.get("description", "")
+        disable_model_invocation = data.get("disable_model_invocation", False)
 
         if not skill_name:
             logger.warning(

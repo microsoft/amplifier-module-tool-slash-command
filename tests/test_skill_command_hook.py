@@ -12,7 +12,9 @@ class MockHooks:
         self.registered_hooks: list[dict] = []
         self.emitted_events: list[tuple] = []
 
-    def register(self, event: str, handler, priority: int = 10, name: str | None = None):
+    def register(
+        self, event: str, handler, priority: int = 10, name: str | None = None
+    ):
         self.registered_hooks.append(
             {"event": event, "handler": handler, "priority": priority, "name": name}
         )
@@ -22,7 +24,7 @@ class MockHooks:
         # Also invoke registered handlers for the event
         for hook in self.registered_hooks:
             if hook["event"] == event_name:
-                await hook["handler"](data)
+                await hook["handler"](event_name, data)
 
 
 class MockCoordinator:
@@ -93,7 +95,10 @@ async def test_skill_command_registered_hook_registers_command():
 async def test_file_based_command_takes_precedence_over_skill(tmp_path: Path):
     """File-based commands take precedence: skill command skipped if file command exists."""
     from amplifier_module_tool_slash_command.tool import mount
-    from amplifier_module_tool_slash_command.parser import CommandMetadata, ParsedCommand
+    from amplifier_module_tool_slash_command.parser import (
+        CommandMetadata,
+        ParsedCommand,
+    )
 
     coordinator = MockCoordinator()
     await mount(coordinator, {})
