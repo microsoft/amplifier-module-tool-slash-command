@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from .executor import CommandExecutor
-from .parser import CommandMetadata, ParsedCommand
 from .registry import CommandRegistry
 
 logger = logging.getLogger(__name__)
@@ -248,55 +247,6 @@ async def mount(coordinator: Any, config: dict[str, Any]) -> Any:
     # Register registry as a capability for access by other components
     coordinator.register_capability("slash_command_registry", registry)
     coordinator.register_capability("slash_command_executor", executor)
-
-    # Register hook listener for skill:command_registered
-    # Skills that emit this event want to register as slash commands.
-    # File-based commands take precedence (checked via get_command).
-    async def on_skill_command_registered(event: str, data: dict[str, Any]) -> None:
-        """Register a skill as a slash command if no file-based command exists."""
-        skill_name = data.get("skill_name", "")
-        description = data.get("description", "")
-        disable_model_invocation = data.get("disable_model_invocation", False)
-
-        if not skill_name:
-            logger.warning(
-                "skill:command_registered event missing skill_name, skipping"
-            )
-            return
-
-        # File-based commands take precedence: skip if command already registered
-        existing = registry.get_command(skill_name)
-        if existing is not None:
-            logger.debug(
-                f"Skill '{skill_name}' skipped - file-based command already registered"
-            )
-            return
-
-        # Build a ParsedCommand for the skill
-        metadata = CommandMetadata(
-            description=description,
-            disable_model_invocation=bool(disable_model_invocation),
-        )
-        cmd = ParsedCommand(
-            name=skill_name,
-            metadata=metadata,
-            template=f'load_skill(skill_name="{skill_name}") $ARGUMENTS',
-            source_file=Path(f"skill://{skill_name}"),
-            namespace=None,
-            scope="skill",
-        )
-
-        # Register in the registry
-        registry.add_command(cmd)
-        logger.info(f"Registered skill '{skill_name}' as slash command")
-
-    coordinator.hooks.register(
-        event="skill:command_registered",
-        handler=on_skill_command_registered,
-        priority=50,
-        name="skill-command-registration",
-    )
-    logger.debug("Registered hook listener for skill:command_registered")
 
     logger.info("tool-slash-command module mounted successfully")
 
