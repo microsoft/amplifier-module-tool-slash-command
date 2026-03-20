@@ -73,7 +73,9 @@ async def test_skill_command_registered_hook_registers_command():
     registry = coordinator.get_capability("slash_command_registry")
     assert registry is not None
 
-    # Emit a skill:command_registered event
+    # Emit a skill:command_registered event.
+    # "context" is included to mirror the real event shape even though
+    # the handler does not use it.
     await coordinator.hooks.emit(
         "skill:command_registered",
         {
